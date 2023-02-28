@@ -454,6 +454,12 @@ TVM_DLL Pass LegalizePackedCalls();
 TVM_DLL Pass LowerMatchBuffer();
 
 /*!
+ * \brief Transform Mma scope (m16n8k8.matrixA/B/C) to local scope with layout transformation.
+ * \return The pass.
+ */
+TVM_DLL Pass TransformMmaBufferLayout();
+
+/*!
  * \brief Remove the block to ensure that the TIR can not be scheduled again.
  * \return The pass.
  */
@@ -646,6 +652,12 @@ TVM_DLL Pass BindParams(const Array<runtime::NDArray>& constants);
  * \return The pass.
  */
 TVM_DLL Pass ExtractPrimFuncConstants();
+
+/*!
+ * \brief Automatically do memory optimizations for auto copy blocks
+ * \return The pass.
+ */
+TVM_DLL Pass LowerAutoCopy();
 
 /*!
  * \brief Renormalize the split pattern from floordiv(floormod()) to floormod(floordiv())
