@@ -19,6 +19,7 @@
 #ifndef TVM_TIR_TRANSFORMS_MEMHAMMER_REWRITE_RULE_H_
 #define TVM_TIR_TRANSFORMS_MEMHAMMER_REWRITE_RULE_H_
 
+
 #include <tvm/arith/iter_affine_map.h>
 #include <tvm/runtime/registry.h>
 #include <tvm/target/target.h>
@@ -239,4 +240,4 @@ std::pair<Stmt, SeqStmt> InsertCacheStage(Stmt stmt, bool is_write_cache, String
 }  // namespace tir
 }  // namespace tvm
 
-#endif  // TVM_TIR_TRANSFORMS_MEMHAMMER_REWRITE_RULE_H_
+#endif // TVM_TIR_TRANSFORMS_MEMHAMMER_REWRITE_RULE_H_
