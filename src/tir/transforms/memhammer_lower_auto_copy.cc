@@ -46,6 +46,8 @@ static CreateLocalStage create_local_stage;
 static SharedToWmma shared_to_wmma;
 static WmmaToGlobal wmma_to_global;
 static WmmaToShared wmma_to_shared;
+static MmaToGlobal mma_to_global;
+static PermuteSharedMemory permute_shared_memory;
 
 /*!
  * \brief A class to perform auto padding.
@@ -720,12 +722,14 @@ class AutoCopyMutator : public StmtExprMutator {
   AutoPadder padder;
 
   /*! \brief All rewrite rules. */
-  const std::array<RewriteRule*, 6> rules = {&inverse_mapping,     //
+  const std::array<RewriteRule*, 8> rules = {&inverse_mapping,     //
                                              &coalesced_access,    //
                                              &create_local_stage,  //
                                              &shared_to_wmma,      //
                                              &wmma_to_global,      //
-                                             &wmma_to_shared};
+                                             &wmma_to_shared,      //
+                                             &mma_to_global,       //
+                                             &permute_shared_memory};
 };
 
 /*!
