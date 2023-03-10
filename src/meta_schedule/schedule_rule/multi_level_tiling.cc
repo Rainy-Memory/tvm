@@ -288,15 +288,16 @@ std::vector<State> MultiLevelTilingNode::AddReadReuse(State state) const {
       if (buffer_ndim == -1) {
         continue;
       }
-      // Do cache_read
-      BlockRV cache_read_block = sch->CacheRead(block_rv, i, config.scope, {block_rv});
-      // Insert cache_read block to the proper place
-      sch->ComputeAt(cache_read_block, loop_rv, true);
-      // Fuse the iterators of the cache_read
-      Array<LoopRV> buffer_loops = sch->GetLoops(cache_read_block);
-      sch->Fuse(Array<LoopRV>{buffer_loops.end() - buffer_ndim,  //
-                              buffer_loops.end()});
-      AnnotateCooperativeFetching(&sch, cache_read_block);
+      // // Do cache_read
+      // BlockRV cache_read_block = sch->CacheRead(block_rv, i, config.scope, {block_rv});
+      // // Insert cache_read block to the proper place
+      // sch->ComputeAt(cache_read_block, loop_rv, true);
+      // // Fuse the iterators of the cache_read
+      // Array<LoopRV> buffer_loops = sch->GetLoops(cache_read_block);
+      // sch->Fuse(Array<LoopRV>{buffer_loops.end() - buffer_ndim,  //
+      //                         buffer_loops.end()});
+      // AnnotateCooperativeFetching(&sch, cache_read_block);
+      BlockRV cache_read_block = sch->ReadAt(loop_rv, block_rv, i, config.scope);
       new_state->read_reuse.emplace(i, cache_read_block);
     }
     results.push_back(std::move(new_state));
