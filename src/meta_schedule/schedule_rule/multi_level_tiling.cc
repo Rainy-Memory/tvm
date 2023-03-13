@@ -138,6 +138,7 @@ std::vector<State> MultiLevelTilingNode::ApplySubRules(std::vector<State> states
 }
 
 std::vector<State> MultiLevelTilingNode::AddWriteReuse(State state) const {
+  return {state};
   const ReuseConfig& config = this->reuse_write_;
   if (config.req == ReuseType::kNoReuse) {
     return {std::move(state)};

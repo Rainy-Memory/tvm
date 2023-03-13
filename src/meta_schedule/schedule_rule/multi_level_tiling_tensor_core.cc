@@ -348,6 +348,9 @@ std::vector<State> MultiLevelTilingTensorCoreNode::TransformIntermediateOutputLa
 
 std::vector<State> MultiLevelTilingTensorCoreNode::AddWriteReuseTensorCore(
     TensorCoreState state) const {
+  state->sch->WriteAt(state->tiles[2].back(), state->block_rv, 0, "m16n8k8.matrixC");
+  state->sch->ReverseComputeInline(state->tensor_core_reindex_store);
+  return {state};
   // Add the cache write stage for Tensor Core
   Schedule& sch = state->sch;
   auto cache_write = sch->CacheWrite(state->block_rv, 0, "wmma.accumulator");
@@ -426,8 +429,10 @@ std::vector<State> MultiLevelTilingTensorCoreNode::AddReadReuseTensorCore(
     TileAndAnnotateTensorize(&sch, cache_read, intrin_name);
   };
 
-  f_tensorize_load(0, "wmma.matrix_a", state->intrin_group.load_a_intrin);
-  f_tensorize_load(1, "wmma.matrix_b", state->intrin_group.load_b_intrin);
+  // f_tensorize_load(0, "wmma.matrix_a", state->intrin_group.load_a_intrin);
+  // f_tensorize_load(1, "wmma.matrix_b", state->intrin_group.load_b_intrin);
+  f_tensorize_load(0, "m16n8k8.matrixA", state->intrin_group.load_a_intrin);
+  f_tensorize_load(1, "m16n8k8.matrixB", state->intrin_group.load_b_intrin);
   sch->ComputeInline(state->tensor_core_reindex_A);
   sch->ComputeInline(state->tensor_core_reindex_B);
 
@@ -477,7 +482,8 @@ std::vector<State> MultiLevelTilingTensorCoreNode::AddSoftwarePipeline(
   // Add local stage and double buffering
   for (int i = 0; i < 2; ++i) {
     const tir::BlockRV cache_read = state->read_reuse.at(i);
-    sch->Annotate(cache_read, tir::attr::manifest_shared_memory_local_stage, Integer(1));
+    sch->Annotate(cache_read, tir::attr::local_stage, Integer(1));
+    sch->Annotate(cache_read, tir::attr::vector_bytes, Integer(8));
     sch->Annotate(cache_read, tir::attr::double_buffer_scope, Integer(0));
   }
 

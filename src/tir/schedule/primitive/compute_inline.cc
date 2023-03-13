@@ -618,6 +618,13 @@ class ReverseComputeInliner : public BaseInliner {
     }
 
     const BufferStoreNode* producer_store = producer_block_->body.as<BufferStoreNode>();
+    if (producer_block_->annotations.count("auto_copy") != 0) {
+      const ForNode* producer_inner_loop = producer_block_->body.as<ForNode>();
+      while (producer_inner_loop->body.as<ForNode>()) {
+        producer_inner_loop = producer_inner_loop->body.as<ForNode>();
+      }
+      producer_store = producer_inner_loop->body.as<BufferStoreNode>();
+    }
     if (producer_store == nullptr) {
       // Failure: producer block body is not BufferStore
       return false;
