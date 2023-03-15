@@ -138,6 +138,7 @@ bool RewriteReductionBlockNode::Apply(const tir::Schedule& sch) {
         continue;
       }
       tir::BlockRV block_rv = GetRVFromSRef(sch, block_sref, global_var_name);
+      
       Array<tir::LoopRV> loop_rvs = sch->GetLoops(block_rv);
       tir::BlockRV init_block_rv = sch->DecomposeReduction(block_rv, loop_rvs[decompose_point]);
 
