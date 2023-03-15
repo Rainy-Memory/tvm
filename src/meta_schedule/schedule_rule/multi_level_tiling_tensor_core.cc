@@ -479,12 +479,14 @@ std::vector<State> MultiLevelTilingTensorCoreNode::AddSoftwarePipeline(
     return {state};
   }
 
+  // sch->DecomposeReduction(state->block_rv, state->tiles[r_indices_[0]].back());
+
   // Add local stage and double buffering
   for (int i = 0; i < 2; ++i) {
     const tir::BlockRV cache_read = state->read_reuse.at(i);
-    sch->Annotate(cache_read, tir::attr::local_stage, Integer(1));
-    sch->Annotate(cache_read, tir::attr::vector_bytes, Integer(8));
-    sch->Annotate(cache_read, tir::attr::double_buffer_scope, Integer(0));
+    // sch->Annotate(cache_read, tir::attr::local_stage, Integer(1));
+    sch->Annotate(cache_read, tir::attr::vector_bytes, Integer(16));
+    // sch->Annotate(cache_read, tir::attr::double_buffer_scope, Integer(0));
   }
 
   // Add annotations of software pipeline
@@ -558,10 +560,16 @@ std::vector<State> MultiLevelTilingTensorCoreNode::AddSoftwarePipeline(
   //   // epilogue of the inner pipeline
   //   compute matmul with fragment K1 - 1 of tile K0 - 1
   //
-  sch->Annotate(state->tiles[r_indices_[0]].back(), tir::attr::software_pipeline_stage,
-                Array<Integer>{0, 0, 0, 0, 0, 1, 1});
+  // sch->Annotate(state->tiles[r_indices_[0]].back(), tir::attr::software_pipeline_stage,
+  //               Array<Integer>{0, 0, 0, 0, 0, 1, 1});
+  // sch->Annotate(state->tiles[r_indices_[0]].back(), tir::attr::software_pipeline_order,
+  //               Array<Integer>{0, 3, 1, 4, 5, 2, 6});
+  sch->Annotate(state->tiles[r_indices_[0]].back(), tir::attr::software_pipeline_async_stages,
+                Array<Integer>{0});
   sch->Annotate(state->tiles[r_indices_[0]].back(), tir::attr::software_pipeline_order,
-                Array<Integer>{0, 3, 1, 4, 5, 2, 6});
+                Array<Integer>{0, 1, 3, 2, 4});
+  sch->Annotate(state->tiles[r_indices_[0]].back(), tir::attr::software_pipeline_stage,
+                Array<Integer>{0, 0, 1, 2, 2});
 
   return {state};
 }
@@ -720,10 +728,10 @@ ScheduleRule ScheduleRule::MultiLevelTilingTensorCore(
   auto node = MultiLevelTilingInitCommon<MultiLevelTilingTensorCoreNode>(
       structure, tile_binds, max_innermost_factor, vector_load_lens, reuse_read, reuse_write);
 
-  CHECK(node->reuse_write_.req == ReuseType::kMustReuse &&
-        runtime::StorageScope::Create(node->reuse_write_.scope).rank ==
-            runtime::StorageRank::kShared)
-      << "ValueError: Shared memory write reuse must be enabled for MultiLevelTilingTensorCore.";
+  // CHECK(node->reuse_write_.req == ReuseType::kMustReuse &&
+  //       runtime::StorageScope::Create(node->reuse_write_.scope).rank ==
+  //           runtime::StorageRank::kShared)
+  //     << "ValueError: Shared memory write reuse must be enabled for MultiLevelTilingTensorCore.";
 
   node->intrin_groups.reserve(intrin_groups.size());
   for (const auto& intrin_group_config : intrin_groups) {

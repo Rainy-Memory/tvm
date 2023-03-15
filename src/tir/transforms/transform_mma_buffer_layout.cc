@@ -42,7 +42,10 @@ class OperandBufferLayoutTransformer : public StmtExprMutator {
         const IntImmNode* dim0 = buffer->shape[size - 2].as<IntImmNode>();
         const IntImmNode* dim1 = buffer->shape[size - 1].as<IntImmNode>();
         ICHECK(dim0 != nullptr && dim1 != nullptr);
-        ICHECK(dim0->value % 16 == 0 && dim1->value % 8 == 0);
+        ICHECK(dim0->value % 16 == 0 && dim1->value % 8 == 0)
+            << "MMA requires the last two dimensions of the output tensor to be divisible by 16 "
+               "and 8 respectively, got "
+            << dim0->value << " and " << dim1->value << " for buffer " << buffer->name << ".";
 
         std::vector<PrimExpr> new_shape;
         for (size_t i = 0; i < size - 2; ++i) {
