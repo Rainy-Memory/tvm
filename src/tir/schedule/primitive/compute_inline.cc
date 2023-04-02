@@ -610,6 +610,13 @@ class ReverseComputeInliner : public BaseInliner {
     }
 
     const BufferStoreNode* producer_store = producer_block_->body.as<BufferStoreNode>();
+    if (producer_block_->annotations.count(tir::attr::auto_copy) != 0) {
+      const ForNode* producer_inner_loop = producer_block_->body.as<ForNode>();
+      while (producer_inner_loop->body.as<ForNode>()) {
+        producer_inner_loop = producer_inner_loop->body.as<ForNode>();
+      }
+      producer_store = producer_inner_loop->body.as<BufferStoreNode>();
+    }
     if (producer_store == nullptr) {
       // Failure: producer block body is not BufferStore
       return false;
@@ -658,7 +665,34 @@ class ReverseComputeInliner : public BaseInliner {
         // imply the original predicate in the producer block.
         throw ProducerHasNonTrivialPredicateError(mod_, GetRef<BlockRealize>(op), new_predicate);
       }
-      new_block_realize.CopyOnWrite()->predicate = new_predicate;
+
+      arith::Analyzer predicate_analyzer;
+      ICHECK(new_block_realize->iter_values.size() == producer_block_->iter_vars.size());
+      for (int i = 0, n = new_block_realize->iter_values.size(); i < n; i++) {
+        const IterVar& iter_var = producer_block_->iter_vars[i];
+        const PrimExpr& iter_val = new_block_realize->iter_values[i];
+        if (iter_val.as<VarNode>()) {
+          predicate_analyzer.Bind(Downcast<Var>(iter_val), iter_var->dom);
+        }
+      }
+      if (producer_block_->annotations.count(tir::attr::auto_copy) != 0) {
+        auto bind = [&](const ForNode* loop) {
+          predicate_analyzer.Bind(
+              loop->loop_var, Range::FromMinExtent(make_zero(loop->extent->dtype), loop->extent));
+        };
+        const ForNode* producer_inner_loop = producer_block_->body.as<ForNode>();
+        while (producer_inner_loop->body.as<ForNode>()) {
+          bind(producer_inner_loop);
+          producer_inner_loop = producer_inner_loop->body.as<ForNode>();
+        }
+        bind(producer_inner_loop);
+      }
+
+      if (predicate_analyzer.CanProve(new_predicate)) {
+        new_block_realize.CopyOnWrite()->predicate = const_true();
+      } else {
+        new_block_realize.CopyOnWrite()->predicate = new_predicate;
+      }
     }
     return std::move(new_block_realize);
   }

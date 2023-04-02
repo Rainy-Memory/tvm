@@ -217,6 +217,14 @@ Array<ScheduleRule> ScheduleRule::DefaultCUDATensorCore() {
           {"compute", "wmma_sync_16x16x16_s8s8s32_trans"},
           {"store", "wmma_store_16x16x16_s32_shared_dyn"},
       },
+      // Tensor Core MMA
+      {
+          {"init", "m16n8k8_init"},
+          {"load_a", "m16n8k8_load_A_row_major"},
+          {"load_b", "m16n8k8_load_B_row_major"},
+          {"compute", "m16n8k8_sync"},
+          {"store", "m16n8k8_store_C_row_major"},
+      },
   };
   Array<ScheduleRule> results{
       ScheduleRule::ApplyCustomRule(),
