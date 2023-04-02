@@ -1250,12 +1250,12 @@ def m16n8k8_sync_impl(a: T.handle, b: T.handle, c: T.handle) -> None:
 
 @T.prim_func
 def m16n8k8_init_desc(c: T.handle) -> None:
-    dst = T.match_buffer(c, (8, 8), "float16", align=64, offset_factor=1, scope="m16n8k8.matrixC")
+    dst = T.match_buffer(c, (16, 8), "float16", align=64, offset_factor=1, scope="m16n8k8.matrixC")
 
     with T.block("root"):
         T.reads()
-        T.writes(dst[0:8, 0:8])
-        for i, j in T.grid(8, 8):
+        T.writes(dst[0:16, 0:8])
+        for i, j in T.grid(16, 8):
             with T.block("m16n8k8_store"):
                 vi, vj = T.axis.remap("SS", [i, j])
                 dst[vi, vj] = T.float16(0)
@@ -1263,17 +1263,18 @@ def m16n8k8_init_desc(c: T.handle) -> None:
 
 @T.prim_func
 def m16n8k8_init_impl(c: T.handle) -> None:
-    dst = T.match_buffer(c, (8, 8), "float16", align=64, offset_factor=1, scope="m16n8k8.matrixC")
+    dst = T.match_buffer(c, (16, 8), "float16", align=64, offset_factor=1, scope="m16n8k8.matrixC")
 
     with T.block("root"):
         T.reads()
-        T.writes(dst[0:8, 0:8])
+        T.writes(dst[0:16, 0:8])
 
         tx = T.env_thread("threadIdx.x")
         T.launch_thread(tx, 32)
 
-        for i in T.vectorized(2):
-            dst[tx // 4, tx % 4 * 2 + i] = T.float16(0)
+        for b in range(2):
+            for i in T.vectorized(2):
+                dst[b * 8 + tx // 4, tx % 4 * 2 + i] = T.float16(0)
 
 
 TensorIntrin.register("m16n8k8_init", m16n8k8_init_desc, m16n8k8_init_impl)

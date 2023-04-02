@@ -232,13 +232,13 @@ std::vector<State> MultiLevelTilingTensorCoreNode::ApplySubRules(std::vector<Sta
   states = SubRule(std::move(states), [&](State state) {
     return TransformIntermediateOutputLayout(Downcast<TensorCoreState>(state));
   });
-  states = SubRule(std::move(states), [&](State state) { return AddWriteReuse(state); });
-  states = SubRule(std::move(states), [&](State state) {
-    return AddWriteReuseTensorCore(Downcast<TensorCoreState>(state));
-  });
   states = SubRule(std::move(states), [&](State state) { return AddReadReuse(state); });
   states = SubRule(std::move(states), [&](State state) {
     return AddReadReuseTensorCore(Downcast<TensorCoreState>(state));
+  });
+  states = SubRule(std::move(states), [&](State state) { return AddWriteReuse(state); });
+  states = SubRule(std::move(states), [&](State state) {
+    return AddWriteReuseTensorCore(Downcast<TensorCoreState>(state));
   });
   states = SubRule(std::move(states), [&](State state) {
     return AddSoftwarePipeline(Downcast<TensorCoreState>(state));

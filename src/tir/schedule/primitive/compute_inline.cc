@@ -618,7 +618,7 @@ class ReverseComputeInliner : public BaseInliner {
     }
 
     const BufferStoreNode* producer_store = producer_block_->body.as<BufferStoreNode>();
-    if (producer_block_->annotations.count("auto_copy") != 0) {
+    if (producer_block_->annotations.count(tir::attr::auto_copy) != 0) {
       const ForNode* producer_inner_loop = producer_block_->body.as<ForNode>();
       while (producer_inner_loop->body.as<ForNode>()) {
         producer_inner_loop = producer_inner_loop->body.as<ForNode>();
@@ -673,7 +673,11 @@ class ReverseComputeInliner : public BaseInliner {
         // imply the original predicate in the producer block.
         throw ProducerHasNonTrivialPredicateError(mod_, GetRef<BlockRealize>(op), new_predicate);
       }
-      new_block_realize.CopyOnWrite()->predicate = new_predicate;
+      if (analyzer_.CanProve(new_predicate)) {
+        new_block_realize.CopyOnWrite()->predicate = const_true();
+      } else {
+        new_block_realize.CopyOnWrite()->predicate = new_predicate;
+      }
     }
     return std::move(new_block_realize);
   }
