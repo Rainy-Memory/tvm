@@ -221,6 +221,14 @@ def build(
     ----
     See the note on :any:`tvm.target` on target string format.
     """
+    # import all intrin here to support local builder
+    from tvm.tir.tensor_intrin import arm_cpu
+    from tvm.tir.tensor_intrin import cuda
+    from tvm.tir.tensor_intrin import dot_product_common
+    from tvm.tir.tensor_intrin import hexagon
+    from tvm.tir.tensor_intrin import rocm
+    from tvm.tir.tensor_intrin import x86
+
     if isinstance(inputs, te.Schedule):
         if args is None:
             raise ValueError("args must be given for build from schedule")
