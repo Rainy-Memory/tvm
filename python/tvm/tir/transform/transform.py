@@ -927,6 +927,17 @@ def TransformMmaBufferLayout():
     return _ffi_api.TransformMmaBufferLayout()  # type: ignore
 
 
+def InjectPermutedLayout():
+    """Inject permuted layout in mma
+
+    Returns
+    -------
+    fpass : tvm.transform.Pass
+        The result pass
+    """
+    return _ffi_api.InjectPermutedLayout()  # type: ignore
+
+
 def UnifyThreadBinding():
     """Unify all the thread bindings for "blockIdx.x/y/z",
     "threadIdx.x/y/z", and "vthread.x/y/z". Before the unification,

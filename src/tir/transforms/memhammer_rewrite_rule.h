@@ -238,22 +238,6 @@ class WmmaToShared : public RewriteRule {
 };
 
 /*!
- * \brief Rewrite wmma->shared data copy with store_matrix_sync
- */
-class PermuteSharedMemory : public RewriteRule {
- public:
-  PermuteSharedMemory() = default;
-  Stmt Rewrite(const Stmt& stmt, const ConstraintSet& constraints, OutputSet* output) const final;
-  bool CanApply(const Stmt& stmt, const ConstraintSet& constraints) const final {
-    Buffer src_buffer = constraints.read_region->buffer;
-    Buffer tgt_buffer = constraints.write_region->buffer;
-    return IsCopyBetweenScope(src_buffer, tgt_buffer, runtime::StorageRank::kGlobal,
-                              runtime::StorageRank::kShared) ||
-           IsScope(src_buffer, runtime::StorageRank::kShared);
-  }
-};
-
-/*!
  * \brief Insert a cache stage to the compute location
  * \param stmt the stmt
  * \param is_write_cache whether to write a read cache or write cache

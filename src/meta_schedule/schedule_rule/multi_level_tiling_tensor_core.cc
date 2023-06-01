@@ -84,6 +84,8 @@ class TensorCoreStateNode : public StateNode {
   tir::BlockRV tensor_core_reindex_store;
   /*! \brief Flag to indicate its a WMMA or MMA intrin group */
   bool is_mma;
+  /*! \brief Flag to indicate whether to use async software pipeline */
+  bool use_async;
 
   State Copy() const final;
 
@@ -95,7 +97,7 @@ class TensorCoreState : public State {
  public:
   explicit TensorCoreState(TensorCoreIntrinGroup intrin_group,
                            tir::AutoTensorizeMappingInfo mapping_info, Schedule sch,
-                           BlockRV block_rv, Array<Array<tir::LoopRV>> tiles = {});
+                           BlockRV block_rv, bool use_async, Array<Array<tir::LoopRV>> tiles = {});
 
   TVM_DEFINE_MUTABLE_OBJECT_REF_METHODS(TensorCoreState, State, TensorCoreStateNode);
 };
@@ -104,7 +106,7 @@ TVM_REGISTER_OBJECT_TYPE(TensorCoreStateNode);
 
 TensorCoreState::TensorCoreState(TensorCoreIntrinGroup intrin_group,
                                  tir::AutoTensorizeMappingInfo mapping_info, Schedule sch,
-                                 BlockRV block_rv, Array<Array<LoopRV>> tiles) {
+                                 BlockRV block_rv, bool use_async, Array<Array<LoopRV>> tiles) {
   ObjectPtr<TensorCoreStateNode> node = make_object<TensorCoreStateNode>();
   node->intrin_group = intrin_group;
   node->mapping_info = mapping_info;
@@ -112,6 +114,7 @@ TensorCoreState::TensorCoreState(TensorCoreIntrinGroup intrin_group,
   node->block_rv = std::move(block_rv);
   node->tiles = std::move(tiles);
   node->is_mma = support::StartsWith(intrin_group.compute_intrin, "m16n8k8");
+  node->use_async = use_async;
   data_ = std::move(node);
 }
 
@@ -133,7 +136,7 @@ class MultiLevelTilingTensorCoreNode : public MultiLevelTilingNode {
   // output in the shared memory.
   std::vector<State> TransformIntermediateOutputLayout(TensorCoreState state);
   // Subrule: Add read cache for mma
-  inline std::vector<State> MMAAddReadReuse(State state) const;
+  inline std::vector<State> MMAAddReadReuse(TensorCoreState state) const;
   // Subrule: Add tensorized load
   inline std::vector<State> AddReadReuseTensorCore(TensorCoreState state) const;
   // Subrule: Add tensorized store
@@ -176,8 +179,8 @@ class MultiLevelTilingTensorCoreNode : public MultiLevelTilingNode {
    * \param block_rv The block to be tensorized
    * \param intrin_name The name of the tensor intrin
    */
-  void TileAndAnnotateTensorize(Schedule* sch, const BlockRV& block_rv,
-                                const String& intrin_name) const;
+  void TileAndAnnotateTensorize(Schedule* sch, const BlockRV& block_rv, const String& intrin_name,
+                                const String& permuted_layout_annotate_value) const;
 
  public:
   /*! \brief The candidate tensor core intrin groups to apply */
@@ -223,7 +226,7 @@ Array<Schedule> MultiLevelTilingTensorCoreNode::Apply(const Schedule& sch,
     const tir::AutoTensorizeMappingInfo& mapping_info = kv.second;
     Schedule new_sch = sch->Copy();
     new_sch->Annotate(block_rv, tir::attr::meta_schedule_tiling_structure, structure);
-    initial_states.push_back(TensorCoreState(intrin_group, mapping_info, new_sch, block_rv));
+    initial_states.push_back(TensorCoreState(intrin_group, mapping_info, new_sch, block_rv, true));
   }
   Array<Schedule> results;
   for (auto&& state : ApplySubRules(initial_states)) {
@@ -255,7 +258,7 @@ std::vector<State> MultiLevelTilingTensorCoreNode::ApplySubRules(std::vector<Sta
   });
   states = SubRule(std::move(states), [&](State state) {
     TensorCoreState tc_state = Downcast<TensorCoreState>(state);
-    return tc_state->is_mma ? MMAAddReadReuse(state) : AddReadReuse(state);
+    return tc_state->is_mma ? MMAAddReadReuse(tc_state) : AddReadReuse(state);
   });
   states = SubRule(std::move(states), [&](State state) {
     return AddReadReuseTensorCore(Downcast<TensorCoreState>(state));
@@ -266,16 +269,19 @@ std::vector<State> MultiLevelTilingTensorCoreNode::ApplySubRules(std::vector<Sta
   return states;
 }
 
-void MultiLevelTilingTensorCoreNode::TileAndAnnotateTensorize(Schedule* sch,
-                                                              const BlockRV& block_rv,
-                                                              const String& intrin_name) const {
+void MultiLevelTilingTensorCoreNode::TileAndAnnotateTensorize(
+    Schedule* sch, const BlockRV& block_rv, const String& intrin_name,
+    const String& permuted_layout_annotate_value) const {
   Optional<LoopRV> loop = TileWithTensorIntrin(*sch, block_rv, intrin_name).value();
   ICHECK(loop.defined());
   BlockRV blockized_outer = (*sch)->Blockize(loop.value());
   (*sch)->Annotate(blockized_outer, tir::attr::meta_schedule_auto_tensorize, intrin_name);
+  if (!permuted_layout_annotate_value.empty()) {
+    (*sch)->Annotate(blockized_outer, "permuted_layout", permuted_layout_annotate_value);
+  }
 }
 
-std::vector<State> MultiLevelTilingTensorCoreNode::MMAAddReadReuse(State state) const {
+std::vector<State> MultiLevelTilingTensorCoreNode::MMAAddReadReuse(TensorCoreState state) const {
   const ReuseConfig& config = this->reuse_read_;
   if (config.req == ReuseType::kNoReuse) {
     return {std::move(state)};
@@ -298,6 +304,10 @@ std::vector<State> MultiLevelTilingTensorCoreNode::MMAAddReadReuse(State state) 
       // Do cache_read
       BlockRV cache_read_block = sch->ReadAt(loop_rv, block_rv, i, config.scope);
       new_state->read_reuse.emplace(i, cache_read_block);
+      if (state->is_mma) {
+        new_state->sch->Annotate(cache_read_block, "permuted_layout",
+                                 String(std::string("g2s_") + std::string(i == 0 ? "A" : "B")));
+      }
     }
     results.push_back(std::move(new_state));
   }
@@ -572,7 +582,9 @@ std::vector<State> MultiLevelTilingTensorCoreNode::AddReadReuseTensorCore(
   auto f_tensorize_load = [&](int read_index, String scope, String intrin_name) {
     auto cache_read = sch->CacheRead(state->block_rv, read_index, scope);
     state->sch->ComputeAt(cache_read, r_tiles.back(), true);
-    TileAndAnnotateTensorize(&sch, cache_read, intrin_name);
+    String permuted_layout_annotate_value =
+        state->is_mma ? std::string("s2l_") + std::string(read_index == 0 ? "A" : "B") : "";
+    TileAndAnnotateTensorize(&sch, cache_read, intrin_name, permuted_layout_annotate_value);
   };
 
   f_tensorize_load(0, state->is_mma ? "m16n8k8.matrixA" : "wmma.matrix_a",
@@ -630,6 +642,10 @@ std::vector<State> MultiLevelTilingTensorCoreNode::AddSoftwarePipeline(
     if (state->is_mma) {
       // Add vector bytes for memhammer
       sch->Annotate(cache_read, tir::attr::vector_bytes, Integer(16));
+      if (!state->use_async) {
+        sch->Annotate(cache_read, tir::attr::local_stage, Integer(1));
+        sch->Annotate(cache_read, tir::attr::double_buffer_scope, Integer(0));
+      }
     } else {
       // Add local stage and double buffering
       sch->Annotate(cache_read, tir::attr::manifest_shared_memory_local_stage, Integer(1));
@@ -668,7 +684,7 @@ std::vector<State> MultiLevelTilingTensorCoreNode::AddSoftwarePipeline(
                 Array<Integer>{0, 0, 1});
   sch->Annotate(state->tiles[r_indices_[1]].back(), tir::attr::software_pipeline_order,
                 Array<Integer>{0, 1, 2});
-  if (state->is_mma) {
+  if (state->is_mma && state->use_async) {
     sch->Annotate(state->tiles[r_indices_[0]].back(), tir::attr::software_pipeline_async_stages,
                   Array<Integer>{0});
     sch->Annotate(state->tiles[r_indices_[0]].back(), tir::attr::software_pipeline_stage,
