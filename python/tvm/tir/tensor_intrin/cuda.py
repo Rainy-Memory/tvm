@@ -1462,19 +1462,9 @@ def get_mma_store_intrin(
     return mma_store_desc, mma_store_desc
 
 
-# TensorIntrin.register("m16n8k8_init", *get_mma_init_intrin(16, 8, 8, "float16"))
-# TensorIntrin.register(
-#     "m16n8k8_load_A_row_major",
-#     *get_mma_load_intrin(32, 32, 8, "float16", "shared.dyn", False, False),
-# )
-# TensorIntrin.register(
-#     "m16n8k8_load_B_row_major",
-#     *get_mma_load_intrin(32, 32, 8, "float16", "shared.dyn", True, False),
-# )
-# TensorIntrin.register("m16n8k8_sync", *get_mma_sync_intrin(16, 8, 8, "float16", "float16", False))
-# TensorIntrin.register("m16n8k8_store_C_row_major", *get_mma_store_intrin(16, 8, 8, "float16"))
-
 TensorIntrin.register("mma_init_m16n8k8_f16", *get_mma_init_intrin(16, 8, 8, "float16"))
+TensorIntrin.register("mma_init_m16n8k8_f32", *get_mma_init_intrin(16, 8, 8, "float32"))
+
 TensorIntrin.register(
     "mma_load_m16n8k8_f16_A_shared_dyn",
     *get_mma_load_intrin(32, 32, 8, "float16", "shared.dyn", False, False),
@@ -1483,11 +1473,11 @@ TensorIntrin.register(
     "mma_load_m16n8k8_f16_B_shared_dyn",
     *get_mma_load_intrin(32, 32, 8, "float16", "shared.dyn", True, False),
 )
-TensorIntrin.register("mma_sync_m16n8k8_f16f16f16", *get_mma_sync_intrin(16, 8, 8, "float16", "float16", False))
-TensorIntrin.register("mma_store_m16n8k8_f16_global", *get_mma_store_intrin(16, 8, 8, "float16"))
 
-TensorIntrin.register("mma_init_m16n8k8_f32", *get_mma_init_intrin(16, 8, 8, "float32"))
+TensorIntrin.register("mma_sync_m16n8k8_f16f16f16", *get_mma_sync_intrin(16, 8, 8, "float16", "float16", False))
 TensorIntrin.register("mma_sync_m16n8k8_f16f16f32", *get_mma_sync_intrin(16, 8, 8, "float16", "float32", False))
+
+TensorIntrin.register("mma_store_m16n8k8_f16_global", *get_mma_store_intrin(16, 8, 8, "float16"))
 TensorIntrin.register("mma_store_m16n8k8_f32_global", *get_mma_store_intrin(16, 8, 8, "float32"))
 
 
