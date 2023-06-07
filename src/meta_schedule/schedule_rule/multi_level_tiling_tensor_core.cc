@@ -113,7 +113,7 @@ TensorCoreState::TensorCoreState(TensorCoreIntrinGroup intrin_group,
   node->sch = std::move(sch);
   node->block_rv = std::move(block_rv);
   node->tiles = std::move(tiles);
-  node->is_mma = support::StartsWith(intrin_group.compute_intrin, "m16n8k8");
+  node->is_mma = support::StartsWith(intrin_group.compute_intrin, "mma_sync");
   node->use_async = use_async;
   data_ = std::move(node);
 }

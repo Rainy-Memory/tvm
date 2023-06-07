@@ -154,7 +154,7 @@ class PermutedLayoutInjector : public StmtExprMutator {
       BlockRealize new_br = BlockRealize(op->iter_values, op->predicate, new_blk);
       return new_br;
     }
-    
+
     return StmtExprMutator::VisitStmt_(op);
   }
 
