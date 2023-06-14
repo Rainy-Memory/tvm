@@ -109,12 +109,12 @@ class OperandBufferLayoutTransformer : public StmtExprMutator {
     if (buffer_map_.count(store->buffer)) {
       auto* n = store.CopyOnWrite();
       if (store->buffer.scope() == "m16n8k8.matrixC") {
-        const auto* index_map_func = runtime::Registry::Get("tir.index_map_m16n8k8.matrixC");
-        ICHECK(index_map_func);
-        auto index_map = IndexMap::FromFunc(2, *index_map_func);
-        auto new_indices = index_map->MapIndices(store->indices);
+        // const auto* index_map_func = runtime::Registry::Get("tir.index_map_m16n8k8.matrixC");
+        // ICHECK(index_map_func);
+        // auto index_map = IndexMap::FromFunc(2, *index_map_func);
+        // auto new_indices = index_map->MapIndices(store->indices);
+        // n->indices = std::move(new_indices);
         n->buffer = buffer_map_[store->buffer];
-        n->indices = std::move(new_indices);
       } else if (store->buffer.scope() == "m16n8k8.matrixA" ||
                  store->buffer.scope() == "m16n8k8.matrixB") {
         n->buffer = buffer_map_[store->buffer];
@@ -128,12 +128,12 @@ class OperandBufferLayoutTransformer : public StmtExprMutator {
     if (buffer_map_.count(load->buffer)) {
       auto* n = load.CopyOnWrite();
       if (load->buffer.scope() == "m16n8k8.matrixC") {
-        const auto* index_map_func = runtime::Registry::Get("tir.index_map_m16n8k8.matrixC");
-        ICHECK(index_map_func);
-        auto index_map = IndexMap::FromFunc(2, *index_map_func);
-        auto new_indices = index_map->MapIndices(load->indices);
+        // const auto* index_map_func = runtime::Registry::Get("tir.index_map_m16n8k8.matrixC");
+        // ICHECK(index_map_func);
+        // auto index_map = IndexMap::FromFunc(2, *index_map_func);
+        // auto new_indices = index_map->MapIndices(load->indices);
+        // n->indices = std::move(new_indices);
         n->buffer = buffer_map_[load->buffer];
-        n->indices = std::move(new_indices);
       } else if (load->buffer.scope() == "m16n8k8.matrixA" ||
                  load->buffer.scope() == "m16n8k8.matrixB") {
         n->buffer = buffer_map_[load->buffer];

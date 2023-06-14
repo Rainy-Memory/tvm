@@ -1327,6 +1327,54 @@ def ptx_ldmatrix(dtype, trans, num, type, local_ptr, local_offset, smem_ptr, sme
     )
 
 
+def ptx_stmatrix(dtype, trans, num, type, smem_ptr, smem_offset, local_ptr, local_offset):
+    """TVM intrinsic for ptx store matrix to shared memory
+    https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-instructions-stmatrix
+
+    Parameters
+    ----------
+    dtype : str
+       The data type of the result.
+
+    trans : bool
+        The matrix is stored in column-major format.
+
+    num : IntImm
+        The number of matrices.
+
+    type : Literal[".b16"]
+        The data type of the matrices.
+
+    smem_ptr : Var
+        The shared memory pointer variable.
+
+    smem_offset : Expr
+        The offset of shared memort pointer.
+
+    local_ptr : Var
+        The local pointer variable.
+
+    local_offset : Expr
+        The offset of local pointer.
+
+    Returns
+    -------
+    call : PrimExpr
+        The call expression.
+    """
+    return call_intrin(
+        dtype,
+        "tir.ptx_stmatrix",
+        trans,
+        num,
+        type,
+        smem_ptr,
+        smem_offset,
+        local_ptr,
+        local_offset,
+    )
+
+
 def ptx_cp_async(dtype, shared_ptr, shared_offset, global_ptr, global_offset, bytes):
     """TVM intrinsic for ptx async copy from global to shared memory
     https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async

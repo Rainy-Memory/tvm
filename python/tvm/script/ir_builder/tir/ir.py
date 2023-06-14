@@ -1861,6 +1861,7 @@ call_pure_extern = _dtype_forward(_tir_op.call_pure_extern)
 ptx_mma = _dtype_forward(_tir_op.ptx_mma)
 ptx_mma_sp = _dtype_forward(_tir_op.ptx_mma_sp)
 ptx_ldmatrix = _dtype_forward(_tir_op.ptx_ldmatrix)
+ptx_stmatrix = _dtype_forward(_tir_op.ptx_stmatrix)
 ptx_cp_async = _dtype_forward(_tir_op.ptx_cp_async)
 mma_store = _dtype_forward(_tir_op.mma_store)
 mma_fill = _dtype_forward(_tir_op.mma_fill)
@@ -2100,6 +2101,7 @@ __all__ = [
     "ptx_mma",
     "ptx_mma_sp",
     "ptx_ldmatrix",
+    "ptx_stmatrix",
     "ptx_cp_async",
     "ptx_wait_group",
     "ptx_commit_group",

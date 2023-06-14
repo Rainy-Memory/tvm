@@ -632,6 +632,71 @@ std::string PrintLoadMatrixAssembly(bool trans, int num, const std::string& type
   return asm_code;
 }
 
+inline std::tuple<std::string, std::string> GetStoreMatrixOperands(
+    int num, const std::string& local_ptr, const std::string& local_elem_offset) {
+  std::stringstream templates, outputs;
+  int arg_counter = 0;
+  // generate templates
+  templates << "[%" << arg_counter++ << "], {%";
+  for (int i = 0; i < num; ++i) {
+    if (i != 0) {
+      templates << ", %";
+    }
+    templates << arg_counter++;
+  }
+  templates << "}";
+  // generate outputs
+  std::string ptr_type = "(unsigned *)";
+  for (int i = 0; i < num; ++i) {
+    if (i != 0) {
+      outputs << ", ";
+    }
+    outputs << "\"=r\"((" << ptr_type << "(" << local_ptr << " + " << local_elem_offset << "))["
+            << i << "])";
+  }
+  return std::make_tuple(templates.str(), outputs.str());
+}
+
+std::string PrintStoreMatrixAssembly(bool trans, int num, const std::string& type,
+                                    const std::string& smem_ptr,
+                                    const std::string& smem_elem_offset,
+                                    const std::string& local_ptr,
+                                    const std::string& local_elem_offset) {
+  CHECK(!trans) << "stmatrix only accept non-transposed matrix.";
+  CHECK(num == 1 || num == 2 || num == 4) << "stmatrix only accept storing 1/2/4 matrices.";
+  ptx::DataType data_type = ptx::DTypeFromString(type);
+  CHECK(data_type == ptx::DataType::kBit16) << "stmatrix only accept matrix with type .b16.";
+  std::string asm_code = R"(
+  {
+    unsigned int addr;
+    __asm__ __volatile__(
+      "{ .reg .u64 addr; cvta.to.shared.u64 addr, %1; cvt.u32.u64 %0, addr; }\n"
+      : "=r"(addr)
+      : "l"((void *)({smem_addr}))
+    );
+    __asm__ __volatile__(
+      "stmatrix.sync.aligned{.shape}{.num}{.trans}{.ss}{.type}"
+      "{templates};\n"
+      : {outputs}
+      : "r"(addr)
+    );
+  }
+)";
+  auto [templates_str, outputs_str] = GetStoreMatrixOperands(num, local_ptr, local_elem_offset);
+
+  Replacer replacer;
+  replacer.register_rule("{.shape}", ".m8n8");
+  replacer.register_rule("{.num}", ".x" + std::to_string(num));
+  replacer.register_rule("{.trans}", trans ? ".trans" : "");
+  replacer.register_rule("{.ss}", ".shared");
+  replacer.register_rule("{.type}", ptx::DTypeToString(data_type));
+  replacer.register_rule("{smem_addr}", smem_ptr + " + " + smem_elem_offset);
+  replacer.register_rule("{templates}", templates_str);
+  replacer.register_rule("{outputs}", outputs_str);
+  asm_code = replacer.rewrite(asm_code);
+  return asm_code;
+}
+
 std::string PrintCpAsyncAssembly(const std::string& shared_ptr,
                                  const std::string& shared_elem_offset,
                                  const std::string& global_ptr,

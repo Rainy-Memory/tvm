@@ -645,6 +645,15 @@ TVM_DLL const Op& ptx_mma_sp();
 TVM_DLL const Op& ptx_ldmatrix();
 
 /*!
+ * \brief tvm intrinsic for ptx store matrix to shared memory.
+ *
+ * void ptx_stmatrix(Bool trans, IntImm num, StringImm type,
+ *                   Var smem_ptr, Expr smem_offset,
+ *                   Var local_ptr, Expr local_offset);
+ */
+TVM_DLL const Op& ptx_stmatrix();
+
+/*!
  * \brief tvm intrinsics for ptx async copy from global to shared memory
  *
  * void ptx_cp_async(Var shared_ptr, Expr shared_offset, Var global_ptr, Expr global_offset, size_t

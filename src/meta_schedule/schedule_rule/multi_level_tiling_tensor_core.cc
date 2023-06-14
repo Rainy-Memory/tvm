@@ -502,14 +502,17 @@ std::vector<State> MultiLevelTilingTensorCoreNode::TransformIntermediateOutputLa
 
 std::vector<State> MultiLevelTilingTensorCoreNode::AddWriteReuseTensorCore(
     TensorCoreState state) const {
-  if (state->is_mma) {
-    state->sch->WriteAt(state->tiles[2].back(), state->block_rv, 0, "m16n8k8.matrixC");
-    state->sch->ReverseComputeInline(state->tensor_core_reindex_store);
-    return {state};
-  }
   // Add the cache write stage for Tensor Core
   Schedule& sch = state->sch;
-  auto cache_write = sch->CacheWrite(state->block_rv, 0, "wmma.accumulator");
+  auto cache_write =
+      sch->CacheWrite(state->block_rv, 0, state->is_mma ? "m16n8k8.matrixC" : "wmma.accumulator");
+
+  if (state->is_mma) {
+    sch->ReverseComputeAt(cache_write, state->tiles[r_indices_[0] - 1].back(), true);
+    TileAndAnnotateTensorize(&sch, cache_write, state->intrin_group.store_intrin, "");
+    sch->ReverseComputeInline(state->tensor_core_reindex_store);
+    return {state};
+  }
 
   // The compute block has been tiled by the warp shape and the fragment shape.
   // We need to bind the cache write block (from the accumulator to the shared memory) to the warp

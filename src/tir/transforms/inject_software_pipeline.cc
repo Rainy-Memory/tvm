@@ -103,6 +103,7 @@ class PipelineOpaqueAccessRewriter {
     static const auto& mma_sync = builtin::tvm_mma_sync();
     static const auto& access_ptr = builtin::tvm_access_ptr();
     static const auto& ptx_ldmatrix = builtin::ptx_ldmatrix();
+    static const auto& ptx_stmatrix = builtin::ptx_stmatrix();
     static const auto& ptx_mma = builtin::ptx_mma();
     if (call->op.same_as(load_matrix_sync) || call->op.same_as(store_matrix_sync)) {
       const Buffer& buffer = buffer_data_to_buffer_.at(Downcast<Var>(call->args[0]));
@@ -132,6 +133,9 @@ class PipelineOpaqueAccessRewriter {
       return RewriteBufferAccess(call, {6, 8, 10});
     } else if (call->op.same_as(ptx_ldmatrix)) {
       return RewriteBufferAccess(call, {3});
+    } else if (call->op.same_as(ptx_stmatrix)) {
+      // TODO: check this is right
+      return RewriteBufferAccess(call, {5});
     }
     return call;
   }

@@ -116,6 +116,8 @@ class WarpStoreCoeffFinder : private StmtExprVisitor {
   void VisitExpr_(const CallNode* op) final {
     if (op->op.same_as(builtin::ptx_ldmatrix()) && op->args[3].as<VarNode>() == buffer_) {
       UpdatePattern(op->args[4]);
+    } else if (op->op.same_as(builtin::ptx_stmatrix()) && op->args[5].as<VarNode>() == buffer_) {
+      UpdatePattern(op->args[6]);
     } else if (op->op.same_as(builtin::mma_fill()) && op->args[1].as<VarNode>() == buffer_) {
       auto* local_size = op->args[0].as<IntImmNode>();
       ICHECK(local_size) << "Integer expected for the first argument of mma_fill";
@@ -271,6 +273,10 @@ class WarpAccessRewriter : protected StmtExprMutator {
 
     if (op->op.same_as(builtin::ptx_ldmatrix())) {
       return RewriteIndicesAt(op, {3});
+    }
+
+    if (op->op.same_as(builtin::ptx_stmatrix())) {
+      return RewriteIndicesAt(op, {5});
     }
 
     if (op->op.same_as(builtin::mma_store())) {

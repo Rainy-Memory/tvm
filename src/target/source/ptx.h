@@ -80,6 +80,22 @@ std::string PrintLoadMatrixAssembly(bool trans, int num, const std::string& type
                                     const std::string& smem_elem_offset);
 
 /*!
+ * \brief Print ldmatrix assembly string given parameters.
+ * \param trans: whether the matrix is stored in column major format or not. false is the only accepted option for now.
+ * \param num: number of matrices to store. 4 is the only accepted option for now.
+ * \param type: The data type in the matrix, .b16 is the only accepted data type.
+ * \param smem_ptr: pointer to the shared memory buffer to load.
+ * \param smem_elem_offset: The offset of the start element of the row to load in shared memory.
+ * \param local_ptr: pointer to local buffer.
+ * \param local_elem_offset: The offset of the element to store in the local buffer.
+ */
+std::string PrintStoreMatrixAssembly(bool trans, int num, const std::string& type,
+                                     const std::string& smem_ptr,
+                                     const std::string& smem_elem_offset,
+                                     const std::string& local_ptr,
+                                     const std::string& local_elem_offset);
+
+/*!
  * \brief Print ptx cp.async assembly string given parameters.
  * \param shared_ptr: The pointer to the destination shared memory.
  * \param shared_elem_offset: The offset into the shared memory.

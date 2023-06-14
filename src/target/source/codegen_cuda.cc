@@ -876,6 +876,24 @@ void CodeGenCUDA::VisitExpr_(const CallNode* op, std::ostream& os) {
       this->stream << PrintLoadMatrixAssembly(trans, num, type, local_ptr, local_elem_offset,
                                               smem_ptr, smem_elem_offset);
     }
+  } else if (op->op.same_as(builtin::ptx_stmatrix())) {
+    // arg 0: whether the matrix is stored in column major format or not. false is the only accepted option for now.
+    // arg 1: number of matrices to store.
+    // arg 2: The data type in the matrix, .b16 is the only accepted data type.
+    // arg 3: pointer to the shared memory buffer to store.
+    // arg 4: The offset of the start element of the row to store in shared memory.
+    // arg 5: pointer to local buffer.
+    // arg 6: The offset of the element to store in the local buffer.
+    ICHECK_EQ(op->args.size(), 7U);
+    bool trans = Downcast<Bool>(op->args[0])->value;
+    int num = Downcast<Integer>(op->args[1])->value;
+    std::string type = Downcast<StringImm>(op->args[2])->value;
+    std::string smem_ptr = this->PrintExpr(op->args[3]);
+    std::string smem_elem_offset = this->PrintExpr(op->args[4]);
+    std::string local_ptr = this->PrintExpr(op->args[5]);
+    std::string local_elem_offset = this->PrintExpr(op->args[6]);
+    this->stream << PrintStoreMatrixAssembly(trans, num, type, smem_ptr, smem_elem_offset,
+                                             local_ptr, local_elem_offset);
   } else if (op->op.same_as(builtin::mma_store())) {
     int m = Downcast<Integer>(op->args[0])->value;
     int n = Downcast<Integer>(op->args[1])->value;

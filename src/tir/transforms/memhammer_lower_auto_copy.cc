@@ -721,13 +721,12 @@ class AutoCopyMutator : public StmtExprMutator {
   AutoPadder padder;
 
   /*! \brief All rewrite rules. */
-  const std::array<RewriteRule*, 7> rules = {&inverse_mapping,     //
+  const std::array<RewriteRule*, 6> rules = {&inverse_mapping,     //
                                              &coalesced_access,    //
                                              &create_local_stage,  //
                                              &shared_to_wmma,      //
                                              &wmma_to_global,      //
-                                             &wmma_to_shared,      //
-                                             &mma_to_global};
+                                             &wmma_to_shared};
 };
 
 /*!

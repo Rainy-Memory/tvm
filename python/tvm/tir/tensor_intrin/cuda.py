@@ -1182,24 +1182,14 @@ def get_wmma_intrin_group(
 ######## MMA intrinsics ########
 
 
-def get_index_A(elem_offset, stride):
+def get_index(elem_offset, stride):
     i = elem_offset // stride
     j = elem_offset % stride
     stride_b = stride // 8
-    bi = i // 32
+    bi = i // 8
     bj = j // 8
     no = bi * stride_b + bj
-    return no * 8 + (i % 32) // 16 * 4
-
-
-def get_index_B(elem_offset, stride):
-    i = elem_offset // stride
-    j = elem_offset % stride
-    stride_b = stride // 32
-    bi = i // 8
-    bj = j // 32
-    no = bi * stride_b + bj
-    return no * 8 + (j % 32) // 8 * 2
+    return no * 2
 
 
 def get_index_C(elem_offset, stride):
@@ -1216,9 +1206,7 @@ def get_mma_init_intrin(
 ) -> Tuple[PrimFunc, PrimFunc]:
     """Generator of mma init intrins"""
     zero = IntImm("int32", 0).astype(dtype)
-    assert m_dim % 8 == 0 and n_dim % 4 == 0, "m_dim and n_dim must be multiple of 8 and 4"
-    assert dtype in ["float16", "float32"]
-    assert n_dim // 4 * int(dtype[-2:]) <= 128, "n_dim vectorize failed"
+    assert m_dim <= 32 and 32 % m_dim == 0
 
     @T.prim_func
     def mma_init_desc(c: T.handle) -> None:
@@ -1235,18 +1223,27 @@ def get_mma_init_intrin(
 
     @T.prim_func
     def mma_init_impl(c: T.handle) -> None:
+        d0 = T.int32()
+        d1 = T.int32()
         dst = T.match_buffer(
-            c, (m_dim, n_dim), dtype, align=64, offset_factor=1, scope="m16n8k8.matrixC"
+            c, (m_dim, n_dim), dtype, align=64, offset_factor=1, scope="m16n8k8.matrixC", strides=[d0, d1]
         )
 
         with T.block("root"):
             T.reads()
             T.writes(dst[0:m_dim, 0:n_dim])
+            
             tx = T.env_thread("threadIdx.x")
             T.launch_thread(tx, 32)
-            for b in range(m_dim // 8):
-                for v in T.vectorized(n_dim // 4):
-                    dst[b * 8 + tx // 4, (tx % 4) * (n_dim // 4) + v] = zero
+            
+            T.evaluate(
+                T.mma_fill(
+                    (32 // m_dim),
+                    dst.access_ptr("w"),
+                    (tx % m_dim) * d0 + (tx // m_dim) * (32 // m_dim),
+                    dtype=dtype
+                )
+            )
 
     return mma_init_desc, mma_init_impl
 
@@ -1266,10 +1263,13 @@ def get_mma_load_intrin(
     trans = (not is_col_major) if is_b else is_col_major
     if is_col_major:
         frag_m, frag_n = frag_n, frag_m
-    get_index = get_index_B if is_b else get_index_A
     get_tx_index = (
         (lambda tx, s0: (tx % 8) * s0 + (tx // 8) * 8) if trans else (lambda tx, s0: tx * s0)
     )
+
+    assert (
+        (frag_m == 32 and frag_n == 8) if not trans else (frag_m == 8 and frag_n == 32)
+    ), "We only support 32x8 or 8x32 fragment for now"
 
     @T.prim_func
     def mma_load_desc(a: T.handle, c: T.handle) -> None:
@@ -1424,9 +1424,9 @@ def get_mma_sync_intrin(
                     in_dtype,
                     out_dtype,
                     A.data,
-                    get_index_A(A.elem_offset, a0),
+                    get_index(A.elem_offset, a0),
                     B.data,
-                    get_index_B(B.elem_offset, b0),
+                    get_index(B.elem_offset, b0),
                     C.data,
                     get_index_C(C.elem_offset, c0),
                     False,
@@ -1438,17 +1438,22 @@ def get_mma_sync_intrin(
 
 
 def get_mma_store_intrin(
-    m_dim: int, n_dim: int, k_dim: int, dtype: str
+    m_dim: int, n_dim: int, dtype: str, shared_scope: str
 ) -> Tuple[PrimFunc, PrimFunc]:
-    """Disable mma store intrin for now."""
+    """Generator of mma stmatrix intrins"""
+    mma_fragment_scope = "m16n8k8.matrixC"
+    # get_tx_index = (
+    #     (lambda tx, s0: (tx % 8) * s0 + (tx // 8) * 8) if trans else (lambda tx, s0: tx * s0)
+    # )
+    get_tx_index = lambda tx, d0: tx * d0
 
     @T.prim_func
     def mma_store_desc(a: T.handle, c: T.handle) -> None:
         src = T.match_buffer(
-            a, (m_dim, n_dim), dtype, align=64, offset_factor=1, scope="m16n8k8.matrixC"
+            a, (m_dim, n_dim), dtype, align=64, offset_factor=1, scope=mma_fragment_scope
         )
         dst = T.match_buffer(
-            c, (m_dim, n_dim), dtype, align=64, offset_factor=1, scope="shared.dyn"
+            c, (m_dim, n_dim), dtype, align=64, offset_factor=1, scope=shared_scope
         )
 
         with T.block("root"):
@@ -1459,7 +1464,52 @@ def get_mma_store_intrin(
                     vi, vj = T.axis.remap("SS", [i, j])
                     dst[vi, vj] = src[vi, vj]
 
-    return mma_store_desc, mma_store_desc
+    @T.prim_func
+    def mma_store_impl(a: T.handle, c: T.handle) -> None:
+        s0 = T.int32()
+        s1 = T.int32()
+        src = T.match_buffer(
+            a,
+            (m_dim, n_dim),
+            dtype,
+            align=64,
+            offset_factor=1,
+            scope="m16n8k8.matrixC",
+            strides=[s0, s1],
+        )
+        d0 = T.int32()
+        d1 = T.int32()
+        dst = T.match_buffer(
+            c,
+            (m_dim, n_dim),
+            dtype,
+            align=64,
+            offset_factor=1,
+            scope="shared.dyn",
+            strides=[d0, d1],
+        )
+
+        with T.block("root"):
+            T.reads(src[0:m_dim, 0:n_dim])
+            T.writes(dst[0:m_dim, 0:n_dim])
+
+            tx = T.env_thread("threadIdx.x")
+            T.launch_thread(tx, 32)
+
+            T.evaluate(
+                T.ptx_stmatrix(
+                    False,
+                    4,  # Always store 4 matrices
+                    ".b16",
+                    dst.access_ptr("w"),
+                    get_tx_index(tx, d0),
+                    src.data,
+                    get_index_C(src.elem_offset, s0),
+                    dtype=dtype,
+                )
+            )
+
+    return mma_store_desc, mma_store_impl
 
 
 TensorIntrin.register("mma_init_m16n8k8_f16", *get_mma_init_intrin(16, 8, 8, "float16"))
@@ -1474,17 +1524,45 @@ TensorIntrin.register(
     *get_mma_load_intrin(32, 32, 8, "float16", "shared.dyn", True, False),
 )
 
-TensorIntrin.register("mma_sync_m16n8k8_f16f16f16", *get_mma_sync_intrin(16, 8, 8, "float16", "float16", False))
-TensorIntrin.register("mma_sync_m16n8k8_f16f16f32", *get_mma_sync_intrin(16, 8, 8, "float16", "float32", False))
+TensorIntrin.register(
+    "mma_sync_m16n8k8_f16f16f16", *get_mma_sync_intrin(16, 8, 8, "float16", "float16", False)
+)
+TensorIntrin.register(
+    "mma_sync_m16n8k8_f16f16f32", *get_mma_sync_intrin(16, 8, 8, "float16", "float32", False)
+)
 
-TensorIntrin.register("mma_store_m16n8k8_f16_global", *get_mma_store_intrin(16, 8, 8, "float16"))
-TensorIntrin.register("mma_store_m16n8k8_f32_global", *get_mma_store_intrin(16, 8, 8, "float32"))
+TensorIntrin.register(
+    "mma_store_m16n8k8_f16_shared_dyn", *get_mma_store_intrin(32, 8, "float16", "shared.dyn")
+)
+TensorIntrin.register(
+    "mma_store_m16n8k8_f32_shared_dyn", *get_mma_store_intrin(32, 8, "float32", "shared.dyn")
+)
 
 
-@register_func("tir.index_map_m16n8k8.matrixC")
-def index_map_m16n8k8_matrixC(ind):
-    i, j = ind[0], ind[1]
-    return convert([(i // 8) // 2, j // 8, (i // 8) % 2, (j % 8) % 2])
+# @register_func("tir.index_map_m16n8k8.matrixC")
+# def index_map_m16n8k8_matrixC(ind):
+#     i, j = ind[0], ind[1]
+#     return convert([(i // 8) // 2, j // 8, (i // 8) % 2, (j % 8) % 2])
+
+
+# def get_index_A(elem_offset, stride):
+#     i = elem_offset // stride
+#     j = elem_offset % stride
+#     stride_b = stride // 8
+#     bi = i // 32
+#     bj = j // 8
+#     no = bi * stride_b + bj
+#     return no * 8 + (i % 32) // 16 * 4
+
+
+# def get_index_B(elem_offset, stride):
+#     i = elem_offset // stride
+#     j = elem_offset % stride
+#     stride_b = stride // 32
+#     bi = i // 8
+#     bj = j // 32
+#     no = bi * stride_b + bj
+#     return no * 8 + (j % 32) // 8 * 2
 
 
 # @T.prim_func
